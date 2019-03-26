@@ -1,0 +1,5 @@
+check process doomsday
+  with pidfile   /var/vcap/sys/run/doomsday/doomsday.pid
+  start program "/var/vcap/jobs/doomsday/bin/doomsday_ctl start"
+  stop program  "/var/vcap/jobs/doomsday/bin/doomsday_ctl stop"
+  group vcap

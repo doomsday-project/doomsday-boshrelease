@@ -1,0 +1,9 @@
+set -e
+
+mkdir -p ${BOSH_INSTALL_TARGET}/bin
+cp doomsday/doomsday ${BOSH_INSTALL_TARGET}/bin/doomsday
+chmod +x ${BOSH_INSTALL_TARGET}/bin/doomsday
+tar -xzf doomsday/doomsday-*.tar.gz
+pushd doomsday-*/
+  cp -R web ${BOSH_INSTALL_TARGET}/web
+popd

@@ -1,0 +1,30 @@
+---
+name: doomsday
+
+templates:
+  bin/doomsday_ctl:          bin/doomsday_ctl
+  config/doomsday.conf:  config/doomsday.conf
+
+packages:
+  - doomsday
+
+properties:
+  backends:
+    description: |
+      (list) The list of backends to ingest certificates from.
+      Example backend configuration can be found at the link below
+      https://github.com/thomasmitchell/doomsday/blob/4556ed48c54fc7ac28978618e2a44f5b5dd7dc9d/docs/ddayconfig.yml#L3-L91
+
+  server:
+    description: |
+      (hash) Configuration for the doomsday server API
+      Example server configuration can be found at the link below
+      https://github.com/thomasmitchell/doomsday/blob/4556ed48c54fc7ac28978618e2a44f5b5dd7dc9d/docs/ddayconfig.yml#L93-L136
+
+  notifications:
+    description: | 
+      (hash) Configuration for doomsday server notifications
+      Example notification backend configuration can be found at the link below
+      https://github.com/thomasmitchell/doomsday/blob/4556ed48c54fc7ac28978618e2a44f5b5dd7dc9d/docs/ddayconfig.yml#L138-L182
+
+
