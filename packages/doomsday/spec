@@ -4,5 +4,4 @@ name: doomsday
 dependencies: []
 
 files:
-  - doomsday/doomsday-*.tar.gz
   - doomsday/doomsday
