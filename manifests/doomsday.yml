@@ -181,4 +181,6 @@ stemcells:
 
 releases:
 - name: doomsday
-  version: latest
+  sha1: d1ef2d11d19a758ee07615c61d7e83f0e1237651
+  url: https://github.com/doomsday-project/doomsday-boshrelease/releases/download/v0.6.0/doomsday-0.6.0.tgz
+  version: 0.6.0
