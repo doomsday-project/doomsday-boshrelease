@@ -1,6 +1,4 @@
-
 # doomsday
-Bumped  to v0.6.0
 
-# doomsday
-Bumped  to v0.7.0
+* Bumped doomsday to v0.7.0. This release adds compatibility for Vault KV v2 backends.
+
