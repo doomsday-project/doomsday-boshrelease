@@ -1,328 +1,267 @@
----
-#
-# ci/pipeline.yml
-#
-# Pipeline structure file for a BOSH Release pipeline
-#
-# DO NOT MAKE CHANGES TO THIS FILE.  Instead, modify
-# ci/settings.yml and override what needs overridden.
-# This uses spruce, so you have some options there.
-#
-# author:  James Hunt <james@niftylogic.com>
-# created: 2016-03-30
-
-meta:
-  name:     (( param "Please name your pipeline" ))
-  release:  (( grab meta.name ))
-  target:   (( param "Please identify the name of the target Concourse CI" ))
-  url:      (( param "Please specify the full url of the target Concourse CI" ))
-  pipeline: (( concat meta.name "-boshrelease" ))
-  manifest:
-    path:   (( concat "manifests/" meta.name ".yml" ))
-    vars:   "--- {}"
-    vars-pr: (( grab meta.manifest.vars ))
-    operator_file_paths: "" # comma separated list relative to repo root
-
-  git:
-    email:  (( param "Please provide the git email for automated commits" ))
-    name:   (( param "Please provide the git name for automated commits" ))
-
-  image:
-    name: starkandwayne/concourse
-    tag: latest
-
-  aws:
-    bucket:     (( grab meta.pipeline ))
-    region_name: us-east-1
-    access_key: (( param "Please set your AWS Access Key ID for your pipeline S3 Bucket" ))
-    secret_key: (( param "Please set your AWS Secret Key ID for your pipeline S3 Bucket" ))
-
-  github:
-    uri:          https://github.com/doomsday-project/doomsday-boshrelease.git
-    owner:        (( param "Please specify the name of the user / organization that owns the Github repository" ))
-    repo:         (( param "Please specify the name of the Github repository" ))
-    branch:       master
-    private_key:  (( param "Please generate an SSH Deployment Key for this repo and specify it here" ))
-    access_token: (( param "Please generate a Personal Access Token to be used for creating github releases (do you have a ci-bot?)" ))
-
-  bosh-lite:
-    target:     (( param "Please specify the BOSH target URI for the bosh-lite to run test deployments against" ))
-    cacert:     (( param "Please specify the BOSH Director Root CA cert" ))
-    username:   admin
-    password:   (( param "Please specify the BOSH Director admin password" ))
-    deployment:    (( concat meta.name "-testflight" ))
-    deployment-pr: (( concat meta.name "-testflight-pr" ))
-
-  slack:
-    webhook:       (( param "Please specify your Slack Incoming Webhook Integration URL" ))
-    success_moji:  ":airplane_departure:"
-    fail_moji:     ":airplane_arriving:"
-    upset_moji:    ":sad_panda:"
-    channel:       (( param "Please specify the channel (#name) or user (@user) to send messages to" ))
-    username:      concourse
-    icon:          https://cl.ly/2F421Y300u07/concourse-logo-blue-transparent.png
-    fail_url: '(( concat "<" meta.url "/teams/$BUILD_TEAM_NAME/pipelines/$BUILD_PIPELINE_NAME/jobs/$BUILD_JOB_NAME/builds/$BUILD_NAME| Concourse Failure! " meta.slack.upset_moji ">" ))'
-
-groups:
-  - name: (( grab meta.pipeline ))
-    jobs:
-      - testflight
-      - rc
-      - shipit
-  - name: versioning
-    jobs:
-      - major
-      - minor
-      - patch
-
 jobs:
-  - name: testflight
-    public: true
-    serial: true
-    plan:
-    - name: main
-      do:
-      - name: get
-        aggregate:
-        - { get: git, trigger: true }
-      - name: testflights
-        aggregate:
-        - name: testflight
-          task: testflight
-          config:
-            platform: linux
-            image_resource:
-              type: docker-image
-              source:
-                repository: (( grab meta.image.name ))
-                tag:        (( grab meta.image.tag ))
-            inputs:
-              - { name: git }
-            run:
-              path: ./git/ci/scripts/testflight
-              args: []
-            params:
-              REPO_ROOT:            git
-              BOSH_ENVIRONMENT:     (( grab meta.bosh-lite.target ))
-              BOSH_CA_CERT:         (( grab meta.bosh-lite.cacert ))
-              BOSH_CLIENT:          (( grab meta.bosh-lite.username ))
-              BOSH_CLIENT_SECRET:   (( grab meta.bosh-lite.password ))
-              BOSH_DEPLOYMENT:      (( grab meta.bosh-lite.deployment ))
-              TEST_ERRANDS:         (( grab meta.test-errands || meta.test-errand || ~ ))
-              AWS_ACCESS_KEY:       (( grab meta.aws.access_key ))
-              AWS_SECRET_KEY:       (( grab meta.aws.secret_key ))
-              MANIFEST_PATH:        (( grab meta.manifest.path ))
-              MANIFEST_VARS:        (( grab meta.manifest.vars ))
-              MANIFEST_OP_PATHS:    (( grab meta.manifest.operator_file_paths ))
-      on_failure:
-        put: notify
-        params:
-          channel:  (( grab meta.slack.channel ))
-          username: (( grab meta.slack.username ))
-          icon_url: (( grab meta.slack.icon ))
-          text:    '(( concat meta.slack.fail_url " " meta.pipeline ": testflight job failed" ))'
-
-  - name: rc
-    public: true
-    serial: true
-    plan:
-    - do:
-      - aggregate:
-          - { get: git,     trigger: true,  passed: [testflight] }
-          - { get: version, trigger: false, params: {pre: rc} }
-      - task: release-notes
+- name: testflight
+  public: true
+  serial: true
+  plan:
+  - name: main
+    do:
+    - name: get
+      in_parallel:
+      - get: git
+        trigger: true
+    - name: testflights
+      in_parallel:
+      - name: testflight
+        task: testflight
         config:
           platform: linux
           image_resource:
             type: docker-image
             source:
-              repository: (( grab meta.image.name ))
-              tag:        (( grab meta.image.tag ))
+              repository: starkandwayne/concourse
           inputs:
-              - { name: git }
+          - name: git
           run:
-            path: sh
-            args:
-            - -ce
-            - |
-              cd git
-              if [ -f ci/release_notes.md ]; then
-                echo "######   RELEASE NOTES   ###############"
-                echo
-                cat ci/release_notes.md
-                echo
-                echo "########################################"
-                echo
-              else
-                echo "NO RELEASE NOTES HAVE BEEN WRITTEN"
-                echo "You *might* want to do that before"
-                echo "hitting (+) on that shipit job..."
-                echo
-              fi
-      - put: version
-        params: {file: version/number}
-      on_failure:
-        put: notify
-        params:
-          channel:  (( grab meta.slack.channel ))
-          username: (( grab meta.slack.username ))
-          icon_url: (( grab meta.slack.icon ))
-          text:    '(( concat meta.slack.fail_url " " meta.pipeline ": rc job failed" ))'
-
-  - name: minor
-    public: true
-    plan:
-    - do:
-      - { get: version, trigger: false, params: {bump: minor} }
-      - { put: version,                 params: {file: version/number} }
-      on_failure:
-        put: notify
-        params:
-          channel:  (( grab meta.slack.channel ))
-          username: (( grab meta.slack.username ))
-          icon_url: (( grab meta.slack.icon ))
-          text:    '(( concat meta.slack.fail_url " " meta.pipeline ": minor job failed" ))'
-
-  - name: patch
-    public: true
-    plan:
-    - do:
-      - { get: version, trigger: false, params: {bump: patch} }
-      - { put: version,                 params: {file: version/number} }
-      on_failure:
-        put: notify
-        params:
-          channel:  (( grab meta.slack.channel ))
-          username: (( grab meta.slack.username ))
-          icon_url: (( grab meta.slack.icon ))
-          text:    '(( concat meta.slack.fail_url " " meta.pipeline ": patch job failed" ))'
-
-  - name: major
-    public: true
-    plan:
-    - do:
-      - { get: version, trigger: false, params: {bump: major} }
-      - { put: version,                 params: {file: version/number} }
-      on_failure:
-        put: notify
-        params:
-          channel:  (( grab meta.slack.channel ))
-          username: (( grab meta.slack.username ))
-          icon_url: (( grab meta.slack.icon ))
-          text:    '(( concat meta.slack.fail_url " " meta.pipeline ": major job failed" ))'
-
-  - name: shipit
-    public: true
-    serial: true
-    plan:
-    - do:
-      - name: inputs
-        aggregate:
-          - { get: version, passed: [rc], params: {bump: final} }
-          - { get: git,     passed: [rc] }
-      - name: release
-        task: release
-        config:
-          platform: linux
-          image_resource:
-            type: docker-image
-            source:
-              repository: (( grab meta.image.name ))
-              tag:        (( grab meta.image.tag ))
-          inputs:
-            - name: version
-            - name: git
-          outputs:
-            - name: gh
-            - name: pushme
-            - name: notifications
-          run:
-            path: ./git/ci/scripts/shipit
+            path: ./git/ci/scripts/testflight
             args: []
           params:
-            REPO_ROOT:    git
-            VERSION_FROM: version/number
-            RELEASE_ROOT: gh
-            REPO_OUT:     pushme
-            NOTIFICATION_OUT: notifications
-            BRANCH:        (( grab meta.github.branch ))
-            GITHUB_OWNER:  (( grab meta.github.owner ))
-            GIT_EMAIL:      (( grab meta.git.email ))
-            GIT_NAME:       (( grab meta.git.name ))
-            AWS_ACCESS_KEY:       (( grab meta.aws.access_key ))
-            AWS_SECRET_KEY:       (( grab meta.aws.secret_key ))
+            REPO_ROOT:            git
+            BOSH_ENVIRONMENT:     ((bosh.url))
+            BOSH_CA_CERT:         ((bosh.ca))
+            BOSH_CLIENT:          ((bosh.username))
+            BOSH_CLIENT_SECRET:   ((bosh.password))
+            BOSH_DEPLOYMENT:      doomsday-ci
+            TEST_ERRANDS:         ~
+            AWS_ACCESS_KEY:       ((aws.access))
+            AWS_SECRET_KEY:       ((aws.secret))
+            MANIFEST_PATH:        manifests/doomsday.yml
+            MANIFEST_VARS:        "--- {}"
+            MANIFEST_OP_PATHS:    ""
 
-      - name: upload-git
-        put: git
+- name: rc
+  public: true
+  serial: true
+  plan:
+  - do:
+    - in_parallel:
+      - get: git
+        trigger: true
+        passed: [testflight]
+      - get: version
+        trigger: false
         params:
-          rebase: true
-          repository: pushme
-      - name: github-release
-        put: github
-        params:
-          name:   gh/name
-          tag:    gh/tag
-          body:   gh/notes.md
-          globs: [gh/artifacts/*]
-      - name: version-bump
-        put: version
-        params:
-          bump: patch
-      - name: notify
-        aggregate:
-        - put: notify
-          params:
-            channel:  (( grab meta.slack.channel ))
-            username: (( grab meta.slack.username ))
-            icon_url: (( grab meta.slack.icon ))
-            text_file: notifications/message
-      on_failure:
-        put: notify
-        params:
-          channel:  (( grab meta.slack.channel ))
-          username: (( grab meta.slack.username ))
-          icon_url: (( grab meta.slack.icon ))
-          text:    '(( concat meta.slack.fail_url " " meta.pipeline ": shipit job failed" ))'
+          pre: rc
+    - task: release-notes
+      config:
+        platform: linux
+        image_resource:
+          type: docker-image
+          source:
+            repository: starkandwayne/concourse
+        inputs:
+        - name: git
+        run:
+          path: sh
+          args:
+          - -ce
+          - |
+            cd git
+            if [ -f ci/release_notes.md ]; then
+              echo "######   RELEASE NOTES   ###############"
+              echo
+              cat ci/release_notes.md
+              echo
+              echo "########################################"
+              echo
+            else
+              echo "NO RELEASE NOTES HAVE BEEN WRITTEN"
+              echo "You *might* want to do that before"
+              echo "hitting (+) on that shipit job..."
+              echo
+            fi
+    - put: version
+      params:
+        file: version/number
 
-resource_types:
-  - name: slack-notification
-    type: docker-image
-    source:
-      repository: cfcommunity/slack-notification-resource
+- name: shipit
+  public: true
+  serial: true
+  plan:
+  - do:
+    - name: inputs
+      in_parallel:
+      - get: version
+        passed: [rc]
+        params: 
+          bump: final
+      - get: git
+        passed: [rc]
+    - name: release
+      task: release
+      config:
+        platform: linux
+        image_resource:
+          type: docker-image
+          source:
+            repository: starkandwayne/concourse
+        inputs:
+        - name: version
+        - name: git
+        outputs:
+        - name: gh
+        - name: pushme
+        - name: notifications
+        run:
+          path: ./git/ci/scripts/shipit
+          args: []
+        params:
+          REPO_ROOT:    git
+          VERSION_FROM: version/number
+          RELEASE_ROOT: gh
+          REPO_OUT:     pushme
+          NOTIFICATION_OUT: notifications
+          BRANCH:        master
+          GITHUB_OWNER:  ((doomsday.org))
+          GIT_EMAIL:      ((github.email))
+          GIT_NAME:       ((github.name)))
+          AWS_ACCESS_KEY: ((aws.access))
+          AWS_SECRET_KEY: ((aws.secret)))
 
-  - name: pull-request
-    type: docker-image
-    source:
-      repository: jtarchie/pr
+    - name: upload-git
+      put: git
+      params:
+        rebase: true
+        repository: pushme
+    - name: github-release
+      put: doomsday-boshrelease
+      params:
+        name:   gh/name
+        tag:    gh/tag
+        body:   gh/notes.md
+        globs: [gh/artifacts/*]
+    - name: version-bump
+      put: version
+      params:
+        bump: patch
+
+- name: patch
+  public: true
+  plan:
+  - do:
+    - get: version
+      params: 
+        bump: patch
+    - put: version
+      params:
+        file: version/number
+
+- name: minor
+  public: true
+  plan:
+  - do:
+    - get: version
+      params:
+        bump: minor
+    - put: version
+      params:
+        file: version/number
+
+- name: major
+  public: true
+  plan:
+  - do:
+    - get: version
+      params:
+        bump: major
+    - put: version
+      params:
+        file: version/number
+
+
+- name: doomsday
+  public: true
+  plan:
+  - in_parallel:
+    - get: git
+    - get: doomsday
+      trigger: true
+      params:
+        globs: [doomsday-linux]
+  - task: update-doomsday
+    config:
+      platform: linux
+      image_resource:
+        type: docker-image
+        source:
+          repository: starkandwayne/concourse
+      inputs:
+      - name: git
+      - name: doomsday
+      outputs:
+      - name: pushme
+      run:
+        path: ./git/ci/scripts/update-blob
+      params:
+        REPO_ROOT:   git
+        REPO_OUT:    pushme
+        BLOB_DIR:    doomsday
+        BLOB_NAME:   doomsday
+        BLOB_BINARY: doomsday-linux
+        BLOB_DESTINATION: doomsday/doomsday
+        BLOB_CLEANUP:     doomsday/doomsday
+        AWS_ACCESS_KEY: ((aws.access))
+        AWS_SECRET_KEY: ((aws.secret))
+        BRANCH:         master
+  - put: git
+    params:
+      rebase: true
+      repository: pushme/git
+
+groups:
+- name: release
+  jobs:
+    - testflight
+    - rc
+    - shipit
+- name: versioning
+  jobs:
+    - major
+    - minor
+    - patch
+- name: blobs
+  jobs:
+  - doomsday
 
 resources:
-  - name: git
-    type: git
-    source:
-      uri:         (( grab meta.github.uri ))
-      branch:      (( grab meta.github.branch ))
-      username:    (( grab meta.github.username ))
-      password:    (( grab meta.github.access_token ))
+- name: git
+  type: git
+  source:
+    uri:         https://github.com/((doomsday.org))/doomsday-boshrelease.git
+    branch:      master
+    username:    ((github.username))
+    password:    ((github.access-token))
 
-  - name: version
-    type: semver
-    source :
-      driver:            s3
-      bucket:            (( grab meta.aws.bucket ))
-      region_name:       (( grab meta.aws.region_name ))
-      key:               version
-      access_key_id:     (( grab meta.aws.access_key ))
-      secret_access_key: (( grab meta.aws.secret_key ))
-      initial_version:   (( grab meta.initial_version || "0.0.1" ))
+- name: version
+  type: semver
+  source :
+    driver:            s3
+    bucket:            doomsday-boshrelease
+    region_name:       us-east-1
+    key:               version
+    access_key_id:     ((aws.access))
+    secret_access_key: ((aws.secret))
+    initial_version:   "1.0.0"
 
-  - name: notify
-    type: slack-notification
-    source:
-      url: (( grab meta.slack.webhook ))
+- name: doomsday-boshrelease
+  type: github-release
+  source:
+    user:         ((doomsday.org))
+    repository:   doomsday-boshrelease
+    access_token: ((github.access-token))
 
-  - name: github
-    type: github-release
-    source:
-      user:         (( grab meta.github.owner ))
-      repository:   (( grab meta.github.repo ))
-      access_token: (( grab meta.github.access_token ))
+- name: doomsday
+  type: github-release
+  source:
+    user:         ((doomsday.org))
+    repository:   doomsday
+    access_token: ((github.access-token))

@@ -1,3 +1,3 @@
 
 # doomsday
-Bumped  to v0.8.1
+Bumped Doomsday to v0.8.1
