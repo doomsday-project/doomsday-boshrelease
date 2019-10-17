@@ -120,12 +120,12 @@ jobs:
           RELEASE_ROOT: gh
           REPO_OUT:     pushme
           NOTIFICATION_OUT: notifications
-          BRANCH:        master
-          GITHUB_OWNER:  ((doomsday.org))
+          BRANCH:         master
+          GITHUB_OWNER:   ((doomsday.org))
           GIT_EMAIL:      ((github.email))
-          GIT_NAME:       ((github.name)))
+          GIT_NAME:       ((github.name))
           AWS_ACCESS_KEY: ((aws.access))
-          AWS_SECRET_KEY: ((aws.secret)))
+          AWS_SECRET_KEY: ((aws.secret))
 
     - name: upload-git
       put: git
