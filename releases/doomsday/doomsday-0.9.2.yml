@@ -1,0 +1,21 @@
+name: doomsday
+version: 0.9.2
+commit_hash: 2e800e9
+uncommitted_changes: false
+jobs:
+- name: doomsday
+  version: 33642142ed9e8357ee4853aede72d6d2bae357ce630b6a242d9e7513c7ef3762
+  fingerprint: 33642142ed9e8357ee4853aede72d6d2bae357ce630b6a242d9e7513c7ef3762
+  sha1: sha256:82e393fef65cf1e95e6b578c2109332f07ba5ddda6a7ebdd04e548e51271fcd4
+  packages:
+  - doomsday
+packages:
+- name: doomsday
+  version: 73522122f30388e578aca8d7d05713bf8269ccf8fb33729712b6e29c1afc86d2
+  fingerprint: 73522122f30388e578aca8d7d05713bf8269ccf8fb33729712b6e29c1afc86d2
+  sha1: sha256:4975fab39be72251396fcb95eb4ca86cd9071e3d179306a005396cca4608a580
+  dependencies: []
+license:
+  version: d315225ab8b74d6d00834c087d4c83e1f8c7778450f91073836540769c05281e
+  fingerprint: d315225ab8b74d6d00834c087d4c83e1f8c7778450f91073836540769c05281e
+  sha1: sha256:0a90b8b2c49b614aa80470eec194f7a2b01adee08e6c03b999e7f5137af665be
